@@ -1,0 +1,7 @@
+The mkyfs.c program in this directory should be run under Unix/Linux,
+not under Yalnix.
+
+All other programs in this directory are some sample test programs
+you can run under Yalnix and YFS for Lab 3.
+
+If you find any problems with these test programs, let me know.
