@@ -13,7 +13,7 @@ main()
 	int i;
 	char name[7];
 
-	for (i = 0; i < 32; i++) {
+	for (i = 0; i < 48; i++) {
 		sprintf(name, "file%02d", i);
 		fd = Create(name);
 		Close(fd);
