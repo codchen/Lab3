@@ -463,6 +463,13 @@ int main(int argc, char **argv)
 		CopyFrom(received_pid, buf, tmp->addr, len); //NEED ERROR CHECK
 		buf[len] = '\0';
 		char *name = split_path(buf);
+		if (strlen(name) > DIRNAMELEN) {
+			tmp->inode = ERROR_NAME_TOO_LONG;
+			Reply(msg_buf, received_pid);
+			free(buf);
+			free(name);
+			continue;
+		}
 		int parent_inode = traverse_wrapper(buf, inode);
 		if (parent_inode <= 0) {
 			tmp->inode = ERROR_NO_DIR;
