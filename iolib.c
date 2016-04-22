@@ -32,7 +32,7 @@ extern int Open(char *pathname) {
 	msg->sym_pursue = 1;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Open file %s failed\n", pathname);
+		fprintf(stderr, "Open file %s failed: %d\n", pathname, msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -49,7 +49,7 @@ extern int Open(char *pathname) {
 extern int Close(int fd) {
 	if (open_file_table[fd].type == INODE_FREE) return ERROR;
 	open_file_table[fd].type = INODE_FREE;
-	if (next_fd == -1) next_fd = fd;
+	if (next_fd == -1 || fd < next_fd) next_fd = fd;
 	return 0;
 }
 
@@ -409,6 +409,10 @@ void update_fd(){
 }
 
 int check_pathname(char *pathname) {
+	if (pathname == NULL) {
+		fprintf(stderr, "NULL pathname\n");
+		return 1;
+	}
 	if (strlen(pathname) > MAXPATHNAMELEN - 1) {
 		fprintf(stderr, "pathname %s too long\n", pathname);
 		return 1;

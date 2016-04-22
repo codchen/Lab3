@@ -108,6 +108,7 @@ void init(){
 	add_dir_entry(ROOTINODE, ROOTINODE, "..");
 	free(occupied_blocks);
 	msg_buf = Malloc(MESSAGESIZE);
+	printf("Successfully Booted\n");
 }
 
 void add_free_inode(int free_inode_num) {
@@ -370,7 +371,7 @@ int dir_traverse(char *path, int current_inode, int *symlink_traversed) {
 			char *buf = (char *)Malloc(next->size+1);
 			read_from_file(inode,0,(void *)buf,next->size);
 			buf[next->size] = '\0';
-			inode = dir_traverse(buf, (buf[0] == '/'?ROOTINODE:inode), symlink_traversed);
+			inode = dir_traverse(buf, (buf[0] == '/'?ROOTINODE:current_inode), symlink_traversed);
 			free(buf);
 			return inode;
 		}
@@ -390,7 +391,7 @@ int dir_traverse(char *path, int current_inode, int *symlink_traversed) {
 			read_from_file(inode,0,(void *)buf,next->size);
 			buf[next->size] = '\0';
 			if (buf[0] == '/') inode = dir_traverse((char *)((long)buf+1),ROOTINODE, symlink_traversed);
-			else inode = dir_traverse(buf, inode, symlink_traversed);
+			else inode = dir_traverse(buf, current_inode, symlink_traversed);
 			free(buf);
 			if (inode <= 0) return inode;
 			return dir_traverse((char *)((long)path+e+1),inode,symlink_traversed);
