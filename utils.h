@@ -44,3 +44,4 @@ extern int Receive_w(void *msg);
 extern int streq(char *path, char *name, int len);
 extern void paste_name(char *dest, char *sr);
 extern char *split_path(char *path);
+extern int dot_entry(char *name);

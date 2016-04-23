@@ -13,6 +13,24 @@
 #define CREATE 8
 #define SEEK 9
 
+//general errors
+#define CURRENT_DIR_NOT_EXIST -1
+#define CURRENT_DIR_REUSED -2
+#define NAME_TOO_LONG -3
+#define TARGET_DIR_NOT_EXIST -4
+#define MAX_SYM -5
+
+#define LINK_DIRECTORY -6
+
+#define DIR_NOT_EMPTY -7
+
+#define ENTRY_EXIST -8
+
+#define DIR_EXIST -9
+#define NO_INODE -10
+
+#define UNLINK_REMOVE_DOT -11
+
 typedef struct message_template {
 	short message_type;
 	short inode;

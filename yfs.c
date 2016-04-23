@@ -148,15 +148,15 @@ int get_free_block() {
 //symlink should be NULL for non-symlink type file creation
 int create_file_by_path(int directory_inode, char *filename, short type) {
 	struct inode *parent = get_inode(directory_inode);
-	if (parent->type != INODE_DIRECTORY) return ERROR_NOT_DIR;
+	if (parent->type != INODE_DIRECTORY) return TARGET_DIR_NOT_EXIST;
 	//check if already exists
 	int existing = has_subdir(directory_inode, filename, strlen(filename));
 	if (existing > 0) {
-		if (type == INODE_DIRECTORY || (type == INODE_REGULAR && get_inode(existing)->type == INODE_DIRECTORY)) return ERROR_DIR_EXIST;
+		if (type == INODE_DIRECTORY || (type == INODE_REGULAR && get_inode(existing)->type == INODE_DIRECTORY)) return DIR_EXIST;
 		return free_file_blocks(existing);
 	}
 	int new_inode = get_free_inode();
-	if (new_inode == 0) return ERROR_NO_FREE_INODE;
+	if (new_inode == 0) return NO_INODE;
 	printf("inode number of file %s: %d\n", filename, new_inode);
 	struct inode *file = get_inode(new_inode);
 	file->type = type;
@@ -216,12 +216,13 @@ int has_subdir(int parent_inode, char *path, int len) {
 			k++;
 		}
 	}
-	return res;
+	return (len < 0?res:TARGET_DIR_NOT_EXIST);
 }
 
 int remove_dir_entry(int parent_inode, char *entry_name) {
+	if (dot_entry(entry_name)) return UNLINK_REMOVE_DOT;
 	struct inode *parent = get_inode(parent_inode);
-	if (parent->type != INODE_DIRECTORY) return ERROR_NOT_DIR;
+	if (parent->type != INODE_DIRECTORY) return TARGET_DIR_NOT_EXIST;
 	int block_num = CEILING(parent->size, BLOCKSIZE);
 	int dirs_num = parent->size / sizeof(struct dir_entry);
 	int checked_dir = 0;
@@ -238,7 +239,7 @@ int remove_dir_entry(int parent_inode, char *entry_name) {
 		current_block = (struct dir_entry *)get_block(current_block_num);
 		int k;
 		for (k = 0; k < MAXDIRPERBLOCK; k++) {
-			if (checked_dir == dirs_num) return ERROR_NO_DIR;
+			if (checked_dir == dirs_num) return TARGET_DIR_NOT_EXIST;
 			checked_dir++;
 			if (current_block[k].inum != 0 && streq(entry_name, current_block[k].name, strlen(entry_name))) {
 				int res = current_block[k].inum;
@@ -248,7 +249,7 @@ int remove_dir_entry(int parent_inode, char *entry_name) {
 			}
 		}
 	}
-	return ERROR_NO_DIR;
+	return TARGET_DIR_NOT_EXIST;
 }
 
 //entry_name must be null-terminated
@@ -350,6 +351,7 @@ int write_to_file(int inode_num, int pos, void *buf, size_t size) {
 
 int traverse_wrapper(char *path, int start_inode) {
 	int *symlink_traversed = Malloc(sizeof(int));
+	*symlink_traversed = 0;
 	int res = dir_traverse(path, start_inode, symlink_traversed);
 	free(symlink_traversed);
 	return res;
@@ -362,11 +364,11 @@ int dir_traverse(char *path, int current_inode, int *symlink_traversed) {
 	int inode;
 	if (e == 0) inode = current_inode;
 	else inode = has_subdir(current_inode, path, e);
-	if (inode == 0) return ERROR_NO_DIR;
+	if (inode < 0) return TARGET_DIR_NOT_EXIST;
 	struct inode *next = get_inode(inode);
 	if (path[e] == '\0') {
 		if (next->type == INODE_SYMLINK) {
-			if (*symlink_traversed == MAXSYMLINKS) return ERROR_MAX_SYM;
+			if (*symlink_traversed == MAXSYMLINKS) return MAX_SYM;
 			*symlink_traversed = *symlink_traversed + 1;
 			char *buf = (char *)Malloc(next->size+1);
 			read_from_file(inode,0,(void *)buf,next->size);
@@ -379,13 +381,13 @@ int dir_traverse(char *path, int current_inode, int *symlink_traversed) {
 	}
 	switch(next->type) {
 		case INODE_FREE:
-			return ERROR_FREE_SUBDIR;
+			return TARGET_DIR_NOT_EXIST;
 		case INODE_REGULAR:
-			return ERROR_NOT_DIR;
+			return TARGET_DIR_NOT_EXIST;
 		case INODE_DIRECTORY:
 			return dir_traverse((char *)((long)path+e+1),inode,symlink_traversed);
 		case INODE_SYMLINK:
-			if (*symlink_traversed == MAXSYMLINKS) return ERROR_MAX_SYM;
+			if (*symlink_traversed == MAXSYMLINKS) return MAX_SYM;
 			*symlink_traversed = *symlink_traversed + 1;
 			char *buf = (char *)Malloc(next->size+1);
 			read_from_file(inode,0,(void *)buf,next->size);
@@ -396,7 +398,7 @@ int dir_traverse(char *path, int current_inode, int *symlink_traversed) {
 			if (inode <= 0) return inode;
 			return dir_traverse((char *)((long)path+e+1),inode,symlink_traversed);
 		default:
-			return ERROR_UNKNOWN_INODE;
+			return TARGET_DIR_NOT_EXIST;
 	}
 }
 
@@ -433,8 +435,13 @@ int main(int argc, char **argv)
 		}
 		short inode = tmp->inode;
 		int reuse = tmp->reuse;
-		if (get_inode(inode)->type == INODE_FREE || get_inode(inode)->reuse != reuse) {
-			tmp->inode = ERROR_FILE_NOT_EXIST;
+		if (get_inode(inode)->type == INODE_FREE) {
+			tmp->inode = CURRENT_DIR_NOT_EXIST;
+			Reply(msg_buf, received_pid);
+			continue;
+		}
+		if (get_inode(inode)->reuse != reuse) {
+			tmp->inode = CURRENT_DIR_REUSED;
 			Reply(msg_buf, received_pid);
 			continue;
 		}
@@ -464,7 +471,7 @@ int main(int argc, char **argv)
 		buf[len] = '\0';
 		char *name = split_path(buf);
 		if (strlen(name) > DIRNAMELEN) {
-			tmp->inode = ERROR_NAME_TOO_LONG;
+			tmp->inode = NAME_TOO_LONG;
 			Reply(msg_buf, received_pid);
 			free(buf);
 			free(name);
@@ -472,7 +479,7 @@ int main(int argc, char **argv)
 		}
 		int parent_inode = traverse_wrapper(buf, inode);
 		if (parent_inode <= 0) {
-			tmp->inode = ERROR_NO_DIR;
+			tmp->inode = TARGET_DIR_NOT_EXIST;
 			Reply(msg_buf, received_pid);
 			free(buf);
 			free(name);
@@ -492,28 +499,43 @@ int main(int argc, char **argv)
 			}
 			case UNLINK: {
 				MessageUnlink *msg_unlink = (MessageUnlink *)msg_buf;
-				msg_unlink->inode = remove_dir_entry(parent_inode, name);
-				if (msg_unlink->inode > 0) {
-					get_inode(msg_unlink->inode)->nlink--;
-					if (get_inode(msg_unlink->inode)->nlink == 0) free_file_inode(msg_unlink->inode);
+				int target_inode = has_subdir(parent_inode, name, strlen(name));
+				if (target_inode < 0 || get_inode(target_inode)->type == INODE_FREE) {
+					msg_unlink->inode = TARGET_DIR_NOT_EXIST;
+				}
+				else if (get_inode(target_inode)->type == INODE_DIRECTORY) {
+					msg_unlink->inode = LINK_DIRECTORY;
+				}
+				else {
+					msg_unlink->inode = remove_dir_entry(parent_inode, name);
+					if (msg_unlink->inode > 0) {
+						get_inode(msg_unlink->inode)->nlink--;
+						if (get_inode(msg_unlink->inode)->nlink == 0) free_file_inode(msg_unlink->inode);
+					}
 				}
 				break;
 			}
 			case RMDIR: {
 				MessageRmDir *msg_rm = (MessageRmDir *)msg_buf;
-				int this_inode = traverse_wrapper(name, parent_inode);
-				if (this_inode <= 0 || get_inode(this_inode)->type != INODE_DIRECTORY || has_subdir(this_inode, NULL, -1) > 2) msg_rm->inode = ERROR_NOT_DIR;
+				int this_inode = has_subdir(parent_inode, name, strlen(name));
+				if (this_inode < 0 || get_inode(this_inode)->type != INODE_DIRECTORY) {
+					msg_rm->inode = TARGET_DIR_NOT_EXIST;
+				}
+				else if (has_subdir(this_inode, NULL, -1) > 2) {
+					msg_rm->inode = DIR_NOT_EMPTY;
+				}
 				else {
 					msg_rm->inode = remove_dir_entry(parent_inode, name);
-					free_file_inode(this_inode);
+					if (msg_rm->inode > 0) 
+						free_file_inode(this_inode);
 				}
 				break;
 			}
 			case LINK: {
 				MessageLink *msg_link = (MessageLink *)msg_buf;
 				struct inode *target = get_inode(msg_link->target_inode);
-				if (target->type == INODE_FREE || target->type == INODE_DIRECTORY || target->reuse != msg_link->target_reuse) msg_link->inode = ERROR_FILE_NOT_EXIST;
-				else if (has_subdir(parent_inode, name, strlen(name))) msg_link->inode = ERROR_ENTRY_EXIST;
+				if (target->type == INODE_FREE || target->reuse != msg_link->target_reuse) msg_link->inode = TARGET_DIR_NOT_EXIST;
+				else if (has_subdir(parent_inode, name, strlen(name)) > 0) msg_link->inode = ENTRY_EXIST;
 				else add_dir_entry(parent_inode, msg_link->target_inode, name);
 				break;
 			}

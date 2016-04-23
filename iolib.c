@@ -14,6 +14,7 @@ typedef struct opened_file {
 
 void update_fd();
 int check_pathname(char *pathname);
+int check_fd(int fd);
 
 static OpenedFile open_file_table[MAX_OPEN_FILES];
 int next_fd = 0; //-1 if MAX_OPEN_FILES files are already opened
@@ -32,7 +33,24 @@ extern int Open(char *pathname) {
 	msg->sym_pursue = 1;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Open file %s failed: %d\n", pathname, msg->inode);
+		fprintf(stderr, "Open file %s failed: ", pathname);
+		switch(msg->inode) {
+			case CURRENT_DIR_NOT_EXIST: {
+				fprintf(stderr, "current directory is freed\n");
+			}
+			case CURRENT_DIR_REUSED: {
+				fprintf(stderr, "the inode (%d) of current directory is reused by other file\n", current_dir_inode);
+			}
+			case NAME_TOO_LONG: {
+				fprintf(stderr, "file name too long\n");
+			}
+			case TARGET_DIR_NOT_EXIST: {
+				fprintf(stderr, "the request directory does not exist\n");
+			}
+			case MAX_SYM: {
+				fprintf(stderr, "too many symlinks, possible infinite loop\n");
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -47,6 +65,7 @@ extern int Open(char *pathname) {
 }
 
 extern int Close(int fd) {
+	if (check_fd(fd)) return ERROR;
 	if (open_file_table[fd].type == INODE_FREE) return ERROR;
 	open_file_table[fd].type = INODE_FREE;
 	if (next_fd == -1 || fd < next_fd) next_fd = fd;
@@ -64,7 +83,10 @@ extern int Create(char *pathname) {
 	msg->type = INODE_REGULAR;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Create file %s failed\n", pathname);
+		fprintf(stderr, "Create file %s failed: ", pathname);
+		// switch(msg->inode) {
+			
+		// }
 		free(msg);
 		return ERROR;
 	}
@@ -79,6 +101,7 @@ extern int Create(char *pathname) {
 }
 
 extern int Read(int fd, void *buf, int size) {
+	if (check_fd(fd)) return ERROR;
 	if (open_file_table[fd].type == INODE_FREE) return ERROR;
 	MessageIO *msg = Malloc(32);
 	msg->message_type = IO;
@@ -102,6 +125,7 @@ extern int Read(int fd, void *buf, int size) {
 
 //ensure type is not dir
 extern int Write(int fd, void *buf, int size) {
+	if (check_fd(fd)) return ERROR;
 	if (open_file_table[fd].type == INODE_FREE || open_file_table[fd].type == INODE_DIRECTORY) return ERROR;
 	MessageIO *msg = Malloc(32);
 	msg->message_type = IO;
@@ -124,6 +148,7 @@ extern int Write(int fd, void *buf, int size) {
 }
 
 extern int Seek(int fd, int offset, int whence) {
+	if (check_fd(fd)) return ERROR;
 	if (open_file_table[fd].type == INODE_FREE) return ERROR;
 	MessageSeek *msg = Malloc(32);
 	msg->message_type = SEEK;
@@ -418,5 +443,17 @@ int check_pathname(char *pathname) {
 		return 1;
 	}
 	else return 0;
+}
+
+int check_fd(int fd) {
+	if (fd < 0 || fd >= MAX_OPEN_FILES) {
+		fprintf(stderr, "Invalid file descriptor: %d\n", fd);
+		return 1;
+	}
+	if (open_file_table[fd] == NULL) {
+		fprintf(stderr, "No open file with file descriptor %d\n", fd);
+		return 1;
+	}
+	return 0;
 }
 

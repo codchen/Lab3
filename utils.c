@@ -92,3 +92,9 @@ extern char *split_path(char *path) {
 	}
 	return name;
 }
+
+extern int dot_entry(char *name) {
+	if (strlen(name) == 1 && name[0] == '.') return 1;
+	if (strlen(name) == 2 && name[0] == '.' && name[1] == '.') return 1;
+	return 0;
+}
