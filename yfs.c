@@ -312,7 +312,7 @@ int write_to_file(int inode_num, int pos, void *buf, size_t size) {
 	struct inode *file = get_inode(inode_num);
 	if (pos > file->size) {
 		void *tmp = Calloc(pos - file->size, sizeof(char));
-		written += write_to_file(inode_num, file->size, tmp, pos - file->size);
+		write_to_file(inode_num, file->size, tmp, pos - file->size);
 		free(tmp);
 	}
 	int end = MIN(pos+size, MAX_FILE_SIZE);
@@ -419,6 +419,7 @@ int main(int argc, char **argv)
 	int received_pid;
 	while (1) {
 		received_pid = Receive_w(msg_buf);
+		printf("Message received\n");
 		MessageTemplate *tmp = (MessageTemplate *)msg_buf;
 		switch(tmp->message_type) {
 			case SYNC: {
@@ -505,6 +506,7 @@ int main(int argc, char **argv)
 					msg_unlink->inode = TARGET_DIR_NOT_EXIST;
 				}
 				else if (get_inode(target_inode)->type == INODE_DIRECTORY) {
+					printf("directory target node: %d of type: %d, parent node: %d, name: %s\n", target_inode, get_inode(target_inode)->type, parent_inode, name);
 					msg_unlink->inode = LINK_DIRECTORY;
 				}
 				else {
