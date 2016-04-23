@@ -27,7 +27,7 @@
 #	For example, the Makefile will make test1 out of test1.c,
 #	if you have a file named test1.c in this directory.
 #
-ALL = yfs iolib.a tcreate tcreate2 tlink tls topen2 tsymlink tunlink2 writeread super_test random_test
+ALL = yfs iolib.a intense
 
 #
 #	You must modify the YFS_OBJS and YFS_SRCS definitions below.

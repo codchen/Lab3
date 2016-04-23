@@ -74,9 +74,11 @@ extern int Create(char *pathname) {
 		switch(msg->inode) {
 			case DIR_EXIST: {
 				fprintf(stderr, "%s already exists as a directory\n", pathname);
+				break;
 			}
 			case NO_INODE: {
 				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+				break;
 			}
 		}
 		free(msg);
@@ -249,9 +251,11 @@ extern int Unlink(char *pathname) {
 		switch(msg->inode) {
 			case UNLINK_REMOVE_DOT: {
 				fprintf(stderr, "cannot remove entry . and entry ..\n");
+				break;
 			}
 			case LINK_DIRECTORY: {
 				fprintf(stderr, "cannot remove link from directory\n");
+				break;
 			}
 		}
 		free(msg);
@@ -275,10 +279,16 @@ extern int SymLink(char *oldname, char *newname) {
 		general_check(msg->inode);
 		switch(msg->inode) {
 			case DIR_EXIST: {
-				fprintf(stderr, "%s already exists as a directory\n", pathname);
+				fprintf(stderr, "%s already exists as a directory\n", newname);
+				break;
 			}
 			case NO_INODE: {
-				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+				fprintf(stderr, "there is no more free inode for new file %s\n", newname);
+				break;
+			}
+			case ENTRY_EXIST: {
+				fprintf(stderr, "pathname is already used\n");
+				break;
 			}
 		}
 		free(msg);
@@ -367,9 +377,15 @@ extern int MkDir(char *pathname) {
 		switch(msg->inode) {
 			case DIR_EXIST: {
 				fprintf(stderr, "%s already exists as a directory\n", pathname);
+				break;
 			}
 			case NO_INODE: {
 				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+				break;
+			}
+			case ENTRY_EXIST: {
+				fprintf(stderr, "pathname is already used\n");
+				break;
 			}
 		}
 		free(msg);
@@ -394,9 +410,11 @@ extern int RmDir(char *pathname) {
 		switch(msg->inode) {
 			case UNLINK_REMOVE_DOT: {
 				fprintf(stderr, "cannot remove entry . and entry ..\n");
+				break;
 			}
 			case DIR_NOT_EMPTY: {
 				fprintf(stderr, "the directory is not empty\n");
+				break;
 			}
 		}
 		free(msg);
@@ -496,7 +514,7 @@ int check_fd(int fd) {
 		fprintf(stderr, "Invalid file descriptor: %d\n", fd);
 		return 1;
 	}
-	if (open_file_table[fd] == NULL) {
+	if (open_file_table[fd].type == INODE_FREE) {
 		fprintf(stderr, "No open file with file descriptor %d\n", fd);
 		return 1;
 	}
@@ -507,18 +525,23 @@ void general_check(int result) {
 	switch(result) {
 		case CURRENT_DIR_NOT_EXIST: {
 			fprintf(stderr, "current directory is freed\n");
+			break;
 		}
 		case CURRENT_DIR_REUSED: {
 			fprintf(stderr, "the inode (%d) of current directory is reused by other file\n", current_dir_inode);
+			break;
 		}
 		case NAME_TOO_LONG: {
 			fprintf(stderr, "file name too long\n");
+			break;
 		}
 		case TARGET_DIR_NOT_EXIST: {
 			fprintf(stderr, "the request directory does not exist\n");
+			break;
 		}
 		case MAX_SYM: {
 			fprintf(stderr, "too many symlinks, possible infinite loop\n");
+			break;
 		}
 	}
 }
@@ -527,9 +550,11 @@ void short_check(int result) {
 	switch(result) {
 		case CURRENT_DIR_NOT_EXIST: {
 			fprintf(stderr, "the file does not exist\n");
+			break;
 		}
 		case CURRENT_DIR_REUSED: {
 			fprintf(stderr, "inode of the file has been reused\n");
+			break;
 		}
 	}
 }

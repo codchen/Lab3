@@ -152,7 +152,8 @@ int create_file_by_path(int directory_inode, char *filename, short type) {
 	//check if already exists
 	int existing = has_subdir(directory_inode, filename, strlen(filename));
 	if (existing > 0) {
-		if (type == INODE_DIRECTORY || (type == INODE_REGULAR && get_inode(existing)->type == INODE_DIRECTORY)) return DIR_EXIST;
+		if (type == INODE_DIRECTORY || type == INODE_SYMLINK) return ENTRY_EXIST;
+		if (get_inode(existing)->type == INODE_DIRECTORY) return DIR_EXIST;
 		return free_file_blocks(existing);
 	}
 	int new_inode = get_free_inode();
