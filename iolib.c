@@ -15,6 +15,8 @@ typedef struct opened_file {
 void update_fd();
 int check_pathname(char *pathname);
 int check_fd(int fd);
+void general_check(int result);
+void short_check(int result);
 
 static OpenedFile open_file_table[MAX_OPEN_FILES];
 int next_fd = 0; //-1 if MAX_OPEN_FILES files are already opened
@@ -34,23 +36,7 @@ extern int Open(char *pathname) {
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
 		fprintf(stderr, "Open file %s failed: ", pathname);
-		switch(msg->inode) {
-			case CURRENT_DIR_NOT_EXIST: {
-				fprintf(stderr, "current directory is freed\n");
-			}
-			case CURRENT_DIR_REUSED: {
-				fprintf(stderr, "the inode (%d) of current directory is reused by other file\n", current_dir_inode);
-			}
-			case NAME_TOO_LONG: {
-				fprintf(stderr, "file name too long\n");
-			}
-			case TARGET_DIR_NOT_EXIST: {
-				fprintf(stderr, "the request directory does not exist\n");
-			}
-			case MAX_SYM: {
-				fprintf(stderr, "too many symlinks, possible infinite loop\n");
-			}
-		}
+		general_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -84,9 +70,15 @@ extern int Create(char *pathname) {
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
 		fprintf(stderr, "Create file %s failed: ", pathname);
-		// switch(msg->inode) {
-			
-		// }
+		general_check(msg->inode);
+		switch(msg->inode) {
+			case DIR_EXIST: {
+				fprintf(stderr, "%s already exists as a directory\n", pathname);
+			}
+			case NO_INODE: {
+				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -113,7 +105,8 @@ extern int Read(int fd, void *buf, int size) {
 	msg->pos = open_file_table[fd].pos;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Read file %d failed\n", fd);
+		fprintf(stderr, "Read file %d failed: ", fd);
+		short_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -137,7 +130,8 @@ extern int Write(int fd, void *buf, int size) {
 	msg->pos = open_file_table[fd].pos;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Write file %d failed\n", fd);
+		fprintf(stderr, "Write file %d failed: ", fd);
+		short_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -156,7 +150,8 @@ extern int Seek(int fd, int offset, int whence) {
 	msg->reuse = open_file_table[fd].reuse;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Get file size %d failed\n", fd);
+		fprintf(stderr, "Get file size %d failed: ", fd);
+		short_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -204,7 +199,8 @@ extern int Link(char *oldname, char *newname) {
 	msg->sym_pursue = 1;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Old name not exist: %s\n", oldname);
+		fprintf(stderr, "Problematic old name: %s: ", oldname);
+		general_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -226,7 +222,11 @@ extern int Link(char *oldname, char *newname) {
 	msg_link->target_reuse = target_reuse;
 	Send((void *)msg_link, -FILE_SERVER);
 	if (msg_link->inode < 0) {
-		fprintf(stderr, "Add link %s failed\n", newname);
+		fprintf(stderr, "Add link %s failed: ", newname);
+		general_check(msg_link->inode);
+		if (msg_link->inode == ENTRY_EXIST) {
+			fprintf(stderr, "the entry name already exist\n");
+		}
 		free(msg_link);
 		return ERROR;
 	}
@@ -244,7 +244,16 @@ extern int Unlink(char *pathname) {
 	msg->name_addr = (void *)pathname;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Pathname %s not exist\n", pathname);
+		fprintf(stderr, "Failed to unlink %s: ", pathname);
+		general_check(msg->inode);
+		switch(msg->inode) {
+			case UNLINK_REMOVE_DOT: {
+				fprintf(stderr, "cannot remove entry . and entry ..\n");
+			}
+			case LINK_DIRECTORY: {
+				fprintf(stderr, "cannot remove link from directory\n");
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -262,7 +271,16 @@ extern int SymLink(char *oldname, char *newname) {
 	msg->type = INODE_SYMLINK;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Create symbolic link %s failed\n", newname);
+		fprintf(stderr, "Create symbolic link %s failed: ", newname);
+		general_check(msg->inode);
+		switch(msg->inode) {
+			case DIR_EXIST: {
+				fprintf(stderr, "%s already exists as a directory\n", pathname);
+			}
+			case NO_INODE: {
+				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -279,13 +297,14 @@ extern int SymLink(char *oldname, char *newname) {
 	msg_write->pos = 0;
 	Send((void *)msg_write, -FILE_SERVER);
 	if (msg_write->inode < 0) {
-		fprintf(stderr, "Symbolic file %s not exist. Please try again\n", newname);
+		fprintf(stderr, "Create symbolic link %s failed: ", newname);
+		short_check(msg_write->inode);
 		free(msg_write);
 		return ERROR;
 	}
 	if (msg_write->len != strlen(oldname)) {
-		//TODO: delete symbolic file
 		fprintf(stderr, "Write symbolic file %s failed\n", newname);
+		Unlink(newname);
 		free(msg_write);
 		return ERROR;
 	}
@@ -304,7 +323,8 @@ extern int ReadLink(char *pathname, char *buf, int len) {
 	msg->sym_pursue = 0;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Read symbolic file %s failed\n", pathname);
+		fprintf(stderr, "Read symbolic file %s failed: ", pathname);
+		general_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -321,7 +341,8 @@ extern int ReadLink(char *pathname, char *buf, int len) {
 	msg_read->pos = 0;
 	Send((void *)msg_read, -FILE_SERVER);
 	if (msg_read->inode < 0) {
-		fprintf(stderr, "Symbolic file %s not exist. Please try again\n", pathname);
+		fprintf(stderr, "ead symbolic file %s failed: ", pathname);
+		short_check(msg_read->inode);
 		free(msg_read);
 		return ERROR;
 	}
@@ -341,7 +362,16 @@ extern int MkDir(char *pathname) {
 	msg->type = INODE_DIRECTORY;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Create directory %s failed\n", pathname);
+		fprintf(stderr, "Create directory %s failed: ", pathname);
+		general_check(msg->inode);
+		switch(msg->inode) {
+			case DIR_EXIST: {
+				fprintf(stderr, "%s already exists as a directory\n", pathname);
+			}
+			case NO_INODE: {
+				fprintf(stderr, "there is no more free inode for new file %s\n", pathname);
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -359,7 +389,16 @@ extern int RmDir(char *pathname) {
 	msg->name_addr = (void *)pathname;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Remove directory %s failed\n", pathname);
+		fprintf(stderr, "Remove directory %s failed: ", pathname);
+		general_check(msg->inode);
+		switch(msg->inode) {
+			case UNLINK_REMOVE_DOT: {
+				fprintf(stderr, "cannot remove entry . and entry ..\n");
+			}
+			case DIR_NOT_EMPTY: {
+				fprintf(stderr, "the directory is not empty\n");
+			}
+		}
 		free(msg);
 		return ERROR;
 	}
@@ -377,7 +416,13 @@ extern int ChDir(char *pathname) {
 	msg->sym_pursue = 1;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Chang to directory %s failed\n", pathname);
+		fprintf(stderr, "Chang to directory %s failed: ", pathname);
+		general_check(msg->inode);
+		free(msg);
+		return ERROR;
+	}
+	if (msg->file_type != INODE_DIRECTORY) {
+		fprintf(stderr, "%s is not a directory\n", pathname);
 		free(msg);
 		return ERROR;
 	}
@@ -398,7 +443,8 @@ extern int Stat(char *pathname, struct Stat *statbuf) {
 	msg->sym_pursue = 1;
 	Send((void *)msg, -FILE_SERVER);
 	if (msg->inode < 0) {
-		fprintf(stderr, "Get stat of file %s failed\n", pathname);
+		fprintf(stderr, "Get stat of file %s failed: ", pathname);
+		general_check(msg->inode);
 		free(msg);
 		return ERROR;
 	}
@@ -457,3 +503,33 @@ int check_fd(int fd) {
 	return 0;
 }
 
+void general_check(int result) {
+	switch(result) {
+		case CURRENT_DIR_NOT_EXIST: {
+			fprintf(stderr, "current directory is freed\n");
+		}
+		case CURRENT_DIR_REUSED: {
+			fprintf(stderr, "the inode (%d) of current directory is reused by other file\n", current_dir_inode);
+		}
+		case NAME_TOO_LONG: {
+			fprintf(stderr, "file name too long\n");
+		}
+		case TARGET_DIR_NOT_EXIST: {
+			fprintf(stderr, "the request directory does not exist\n");
+		}
+		case MAX_SYM: {
+			fprintf(stderr, "too many symlinks, possible infinite loop\n");
+		}
+	}
+}
+
+void short_check(int result) {
+	switch(result) {
+		case CURRENT_DIR_NOT_EXIST: {
+			fprintf(stderr, "the file does not exist\n");
+		}
+		case CURRENT_DIR_REUSED: {
+			fprintf(stderr, "inode of the file has been reused\n");
+		}
+	}
+}
