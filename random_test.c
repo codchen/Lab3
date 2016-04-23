@@ -14,17 +14,18 @@ void close_files(int num);
 int
 main()
 {
-    // /a/b/c, symlink(c, /d/e), mkdir(d), chdir(d), mkdir(e), chdir(e), create(f), open(/a/b/c/f)
-    printf("testing symlink\n");
-    printf("[Mkdir] /a, code: %d\n", MkDir("a"));
-    printf("[Mkdir] /a/b, code: %d\n", MkDir("/a/b"));
+    // test //////dirname//subdirname///file
+    // /a/b/c(symlink, /d/e, c) (symlink, /a/b/c, /d/e))
+    printf("testing seek\n");
+    printf("[Mkdir] /a, fd: %d\n", MkDir("a"));
+    printf("[Create] c, fd: %d\n", Create("c"));
+    printf("[Mkdir] ////a//b, code: %d\n", MkDir("/a/b"));
     printf("[Chdir] /a/b, code: %d\n", ChDir("/a/b"));
-    printf("[SymLink] c, /d/e, code: %d\n", SymLink("c", "/d/e"));
-    printf("[Chdir] /, code: %d\n", ChDir("/"));
-    printf("[Mkdir] /d, code: %d\n", MkDir("d"));
-    printf("[Mkdir] /d/e, code: %d\n", MkDir("/d/e"));
-    printf("[Create] /d/e/f, fd: %d\n", Create("/d/e/f"));
-    printf("[Open] /a/b/c/f, fd: %d\n", Open("/a/b/c/f"));
+    printf("[Open] c, fd: %d\n", Open("c"));
+    printf("[Chdir] .., code: %d\n", ChDir(".."));
+    printf("[Open] c, fd: %d\n", Open("c"));
+    printf("[Chdir] .., code: %d\n", ChDir(".."));
+    printf("[Open] c, fd: %d\n", Open("c"));
 
     Shutdown();
     exit(0);

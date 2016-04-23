@@ -64,6 +64,12 @@ custom_test(char *str) {
 		generate_content(buf, size);
 		code = Write(fd, buf, size);
 		printf("[WRITE] fd: %d, content: %s, wrote size: %d\n", fd, buf, code);
+	} else if (strcmp(p, "seek") == 0) {
+		fd = atoi(strtok(NULL, " "));
+		int offset = atoi(strtok(NULL, " "));
+		int whence = atoi(strtok(NULL, " "));
+		code = Seek(fd, offset, whence);
+		printf("[SEEK] fd: %d, offset: %d, whence: %d, return val: %d\n", fd, offset, whence, code);
 	} else if (strcmp(p, "mkdir") == 0) {
 		p = strtok(NULL, " ");
 		code = MkDir(p);
@@ -76,6 +82,10 @@ custom_test(char *str) {
 		p = strtok(NULL, " ");
 		code = RmDir(p);
 		printf("[RMDIR] dir: %s, return fd: %d\n", p, code);
+	} else if (strcmp(p, "unlink") == 0) {
+		p = strtok(NULL, " ");
+		code = Unlink(p);
+		printf("[UNLINK] dir: %s, return code: %d\n", p, code);
 	} else if (strcmp(p, "stat") == 0) {
 		p = strtok(NULL, " ");
 		struct Stat *st = (struct Stat *) malloc(sizeof(struct Stat));
@@ -86,6 +96,12 @@ custom_test(char *str) {
 		char *newname = strtok(NULL, " ");
 		code = Link(oldname, newname);
 		printf("[LINK] old:%s, new:%s, code: %d\n", oldname, newname, code);
+	} else if (strcmp(p, "readlink") == 0) {
+		p = strtok(NULL, " ");
+		size = atoi(strtok(NULL, " "));
+		buf = (char *) malloc(size);
+		code = ReadLink(p, buf, size);
+		printf("[READLINK] pathname:%s, len:%d, read_len: %d\n", p, size, code);
 	} else if (strcmp(p, "symlink") == 0) { 
 		char *oldname = strtok(NULL, " ");
 		char *newname = strtok(NULL, " ");
