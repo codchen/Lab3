@@ -417,9 +417,13 @@ int main(int argc, char **argv)
 		}
 	}
 	int received_pid;
+	int last_inode = -1;
 	while (1) {
 		received_pid = Receive_w(msg_buf);
 		printf("Message received\n");
+		if (last_inode != -1) {
+			printf("type: %d\n", get_inode(last_inode)->type);
+		}
 		MessageTemplate *tmp = (MessageTemplate *)msg_buf;
 		switch(tmp->message_type) {
 			case SYNC: {
@@ -546,6 +550,7 @@ int main(int argc, char **argv)
 				MessageCreate *msg_create = (MessageCreate *)msg_buf;
 				msg_create->inode = create_file_by_path(parent_inode, name, msg_create->type);
 				if (msg_create->inode > 0) msg_create->reuse = get_inode(msg_create->inode)->reuse;
+				last_inode = msg_create->inode;
 				break;
 			}
 		}
